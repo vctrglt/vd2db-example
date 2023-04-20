@@ -1,0 +1,22 @@
+[tool.poetry]
+name = "vd2db"
+version = "0.1.0"
+description = ""
+authors = ["corralien <damien.corral@gmail.com>"]
+readme = "README.md"
+
+[tool.poetry.scripts]
+vd2db = "vd2db.console:cli"
+
+[tool.poetry.dependencies]
+python = "^3.9"
+pandas = ">=1.5.3"
+sqlalchemy = ">=2"
+click = "^8.1.3"
+
+[tool.poetry.group.dev.dependencies]
+ipython = "^8.12.0"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
