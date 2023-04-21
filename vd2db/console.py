@@ -20,7 +20,7 @@ METADATA = ['Scenario', 'Attribute', 'Commodity', 'Process', 'Period',
 
 DIMENSIONS = ['Attribute', 'Commodity', 'Process', 'Period', 'Region', 'Vintage', 'TimeSlice', 'UserConstraint', 'PV']
 
-APP_NAME = 'vd2pd'
+APP_NAME = 'vd2db'
 APP_VERSION = '0.1'
 
 CONFIG_DIR = pathlib.Path(click.get_app_dir(APP_NAME))
