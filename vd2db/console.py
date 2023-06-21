@@ -3,13 +3,11 @@ import pandas as pd
 import pathlib
 from sqlalchemy.engine import create_engine, URL
 from sqlalchemy.schema import MetaData, Table, Column, ForeignKey
-from sqlalchemy.sql import insert, select, text, update
-from sqlalchemy.types import String, Integer, Float, SmallInteger, DateTime
+from sqlalchemy.sql import insert, select
+from sqlalchemy.types import String, Integer, Float, DateTime
 from sqlalchemy.ext.automap import automap_base
 from datetime import datetime
 from .vdfile import read_vdfile
-from .schemas import schemas
-from tqdm import tqdm
 from rich.progress import Progress, TextColumn, BarColumn, TaskProgressColumn, MofNCompleteColumn
 
 
