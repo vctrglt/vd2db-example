@@ -3,7 +3,7 @@ import pandas as pd
 import pathlib
 from sqlalchemy.engine import create_engine, URL
 from sqlalchemy.schema import MetaData, Table, Column, ForeignKey
-from sqlalchemy.sql import insert, select
+from sqlalchemy.sql import insert, select, text
 from sqlalchemy.types import String, Integer, Float, DateTime
 from sqlalchemy.ext.automap import automap_base
 from datetime import datetime
@@ -24,6 +24,7 @@ fmt = '{desc:<25.20}{percentage:3.0f}%|{bar:40}|{n_fmt:>3}/{total_fmt:>3}'
 
 
 @click.group()
+@click.version_option()
 def cli():
     CONFIG_DIR.mkdir(parents=True, exist_ok=True)
     DATA_DIR.mkdir(parents=True, exist_ok=True)
@@ -72,18 +73,28 @@ def import_scenario(vdfiles, dbname):
         for attr, df in veda.groupby('Attribute'):
             dataset[attr] = df.loc[:, ~df.isna().all()].drop(columns='Attribute')
 
-        # Create missing tables
-        tables = []
-        for name, df in dataset.items():
-            if name not in Base.classes:
-                params = [Column('ID', Integer, primary_key=True)]
-                for col in df.columns[:-1]:
-                    params.append(Column(col, Integer, ForeignKey(f'{col}.ID', onupdate='CASCADE', ondelete='CASCADE')))
-                params.append(Column('PV', Float))
-                tables.append(Table(name, metadata, *params))
+        # Create missing tables and views
+        with engine.connect() as con:
+            for name, df in dataset.items():
+                if name not in Base.classes:
+
+                    # Table factory
+                    params = [Column('ID', Integer, primary_key=True)]
+                    for col in df.columns[:-1]:
+                        params.append(Column(col, Integer, ForeignKey(f'{col}.ID', onupdate='CASCADE', ondelete='CASCADE')))
+                    params.append(Column('PV', Float))
+                    # tables.append(Table(name, metadata, *params))
+                    Table(name, metadata, *params).create(con)
+
+                    # View factory
+                    part1 = [f'{col}.Name AS {col}' for col in df.columns[:-1]]
+                    part1.insert(1, f"'{name}' AS Attribute")
+                    part1.append('PV')
+                    part2 = [f'LEFT JOIN {col} ON {name}.{col} = {col}.ID' for col in df.columns[:-1]]
+                    stmt = f"""CREATE VIEW vd_{name} AS SELECT {', '.join(part1)} FROM {name} {' '.join(part2)}"""
+                    con.execute(text(stmt))
 
         # Reload mapped classes
-        metadata.create_all(engine, tables=tables)
         Base.prepare(engine)
 
         # Load dictionaries
