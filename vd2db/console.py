@@ -54,9 +54,9 @@ def init_database(dbname):
 
 
 @click.command(name='import')
-@click.argument('vdfiles', type=click.Path(path_type=pathlib.Path), nargs=-1, required=True)
+@click.argument('vdfile', type=click.Path(path_type=pathlib.Path), nargs=1, required=True)
 @click.argument('dbname', nargs=1, required=True)
-def import_scenario(vdfiles, dbname):
+def import_scenario(vdfile, dbname):
     """Import specified scenario."""
     db = DATA_DIR / f'{dbname}.db'
     engine = create_engine(URL.create('sqlite', database=str(db)), echo=False)
@@ -64,75 +64,75 @@ def import_scenario(vdfiles, dbname):
     Base.prepare(engine)
     metadata = Base.metadata
 
-    for vdfile in vdfiles:
-        # Read VD File
-        veda = read_vdfile(vdfile)
+    # Read VD File
+    veda = read_vdfile(vdfile)
 
-        # Explode data into multiple dataframes
-        dataset = {}
-        for attr, df in veda.groupby('Attribute'):
-            dataset[attr] = df.loc[:, ~df.isna().all()].drop(columns='Attribute')
+    # Explode data into multiple dataframes
+    dataset = {}
+    for attr, df in veda.groupby('Attribute'):
+        dataset[attr] = df.loc[:, ~df.isna().all()].drop(columns='Attribute')
 
-        # Create missing tables and views
-        with engine.connect() as con:
-            for name, df in dataset.items():
-                if name not in Base.classes:
+    # Create missing tables and views
+    with engine.connect() as con:
+        for name, df in dataset.items():
+            if name not in Base.classes:
 
-                    # Table factory
-                    params = [Column('ID', Integer, primary_key=True)]
-                    for col in df.columns[:-1]:
-                        params.append(Column(col, Integer, ForeignKey(f'{col}.ID', onupdate='CASCADE', ondelete='CASCADE')))
-                    params.append(Column('PV', Float))
-                    # tables.append(Table(name, metadata, *params))
-                    Table(name, metadata, *params).create(con)
+                # Table factory
+                params = [Column('ID', Integer, primary_key=True)]
+                for col in df.columns[:-1]:
+                    params.append(Column(col, Integer, ForeignKey(f'{col}.ID', onupdate='CASCADE', ondelete='CASCADE')))
+                params.append(Column('PV', Float))
+                # tables.append(Table(name, metadata, *params))
+                Table(name, metadata, *params).create(con)
 
-                    # View factory
-                    part1 = [f'{col}.Name AS {col}' for col in df.columns[:-1]]
-                    part1.insert(1, f"'{name}' AS Attribute")
-                    part1.append('PV')
-                    part2 = [f'LEFT JOIN {col} ON {name}.{col} = {col}.ID' for col in df.columns[:-1]]
-                    stmt = f"""CREATE VIEW vd_{name} AS SELECT {', '.join(part1)} FROM {name} {' '.join(part2)}"""
-                    con.execute(text(stmt))
+                # View factory
+                part1 = [f'{col}.Name AS {col}' for col in df.columns[:-1]]
+                part1.insert(1, f"'{name}' AS Attribute")
+                part1.append('PV')
+                part2 = [f'LEFT JOIN {col} ON {name}.{col} = {col}.ID' for col in df.columns[:-1]]
+                stmt = f"""CREATE VIEW vd_{name} AS SELECT {', '.join(part1)} FROM {name} {' '.join(part2)}"""
+                con.execute(text(stmt))
+        con.commit()
 
-        # Reload mapped classes
-        Base.prepare(engine)
+    # Reload mapped classes
+    Base.prepare(engine)
 
-        # Load dictionaries
-        with engine.connect() as con:
-            uniques = {dim: pd.DataFrame({'Name': veda[dim].dropna().unique()})
-                       for dim in veda.columns.intersection(DIMENSIONS)}
-            indexes = {}
-            for dim, data in uniques.items():
-                stmt = select(Base.classes[dim])
+    # Load dictionaries
+    with engine.connect() as con:
+        uniques = {dim: pd.DataFrame({'Name': veda[dim].dropna().unique()})
+                   for dim in veda.columns.intersection(DIMENSIONS)}
+        indexes = {}
+        for dim, data in uniques.items():
+            stmt = select(Base.classes[dim])
 
-                # Load existing data
+            # Load existing data
+            cur = con.execute(stmt)
+            df = pd.DataFrame.from_records(cur, columns=cur.keys())
+            new_data = data[~data['Name'].isin(df['Name'])]
+
+            # Insert new data and reload it
+            if not new_data.empty:
+                con.execute(insert(Base.classes[dim]), new_data.to_dict('records'))
+                con.commit()
                 cur = con.execute(stmt)
                 df = pd.DataFrame.from_records(cur, columns=cur.keys())
-                new_data = data[~data['Name'].isin(df['Name'])]
 
-                # Insert new data and reload it
-                if not new_data.empty:
-                    con.execute(insert(Base.classes[dim]), new_data.to_dict('records'))
-                    con.commit()
-                    cur = con.execute(stmt)
-                    df = pd.DataFrame.from_records(cur, columns=cur.keys())
+            indexes[dim] = df.set_index('Name')['ID']
 
-                indexes[dim] = df.set_index('Name')['ID']
-
-        with Progress(
-            TextColumn("[progress.description]{task.description}"),
-            BarColumn(),
-            TaskProgressColumn(),
-            MofNCompleteColumn(),
-            transient=True
-        ) as progress:
-            with engine.connect() as con:
-                # for attr, df in tqdm(dataset.items(), bar_format=fmt, desc=vdfile.stem, unit='tables'):
-                for attr, df in progress.track(dataset.items(), description=f'[yellow]Processing "{vdfile.name}"'):
-                    df = df.replace(indexes)
-                    con.execute(insert(Base.classes[attr]), df.to_dict('records'))
-                    con.commit()
-                progress.print(f'[green]Processed "{vdfile.name}": {len(dataset)} tables - {len(veda)} records')
+    with Progress(
+        TextColumn("[progress.description]{task.description}"),
+        BarColumn(),
+        TaskProgressColumn(),
+        MofNCompleteColumn(),
+        transient=True
+    ) as progress:
+        with engine.connect() as con:
+            # for attr, df in tqdm(dataset.items(), bar_format=fmt, desc=vdfile.stem, unit='tables'):
+            for attr, df in progress.track(dataset.items(), description=f'[yellow]Processing "{vdfile.name}"'):
+                df = df.replace(indexes)
+                con.execute(insert(Base.classes[attr]), df.to_dict('records'))
+                con.commit()
+            progress.print(f'[green]Processed "{vdfile.name}": {len(dataset)} tables - {len(veda)} records')
 
 
 @click.command(name='update')
@@ -150,6 +150,7 @@ def remove_scenario():
 
 
 cli.add_command(init_database)
+cli.add_command(list_scenarios)
 cli.add_command(import_scenario)
 cli.add_command(update_scenario)
 cli.add_command(remove_scenario)
