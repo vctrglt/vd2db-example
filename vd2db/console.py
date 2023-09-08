@@ -53,6 +53,23 @@ def init_database(dbname):
     metadata.create_all(engine)
 
 
+@click.command(name='list')
+@click.argument('dbname', nargs=1, required=True)
+def list_scenarios(dbname):
+    """List scenarios in specified database."""
+    db = DATA_DIR / f'{dbname}.db'
+    engine = create_engine(URL.create('sqlite', database=str(db)), echo=False)
+    Base = automap_base()
+    Base.prepare(engine)
+    metadata = Base.metadata
+
+    with engine.connect() as con:
+        scenarios = con.execute(select(Base.classes['Scenario'].Name)).all()
+        print(f'{len(scenarios)} scenario(s) found in "{dbname}" database:')
+        for scen in scenarios:
+            print(f'- {scen.Name}')
+
+
 @click.command(name='import')
 @click.argument('vdfile', type=click.Path(path_type=pathlib.Path), nargs=1, required=True)
 @click.argument('dbname', nargs=1, required=True)
