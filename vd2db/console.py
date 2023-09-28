@@ -3,7 +3,7 @@ import pandas as pd
 import pathlib
 from sqlalchemy.engine import create_engine, URL
 from sqlalchemy.schema import MetaData, Table, Column, ForeignKey
-from sqlalchemy.sql import insert, select, text
+from sqlalchemy.sql import insert, select, text, delete
 from sqlalchemy.types import String, Integer, Float, DateTime
 from sqlalchemy.ext.automap import automap_base
 from datetime import datetime
@@ -158,12 +158,19 @@ def update_scenario():
 
 
 @click.command(name='remove')
-def remove_scenario():
+@click.argument('scenario', nargs=1, required=True)
+@click.argument('dbname', nargs=1, required=True)
+def remove_scenario(scenario, dbname):
     """Remove specified  scenario."""
     db = DATA_DIR / f'{dbname}.db'
     engine = create_engine(URL.create('sqlite', database=str(db)), echo=False)
     Base = automap_base()
     Base.prepare(engine)
+
+    with engine.connect() as con:
+        scenario_table = Base.classes['Scenario']
+        con.execute(delete(scenario_table).where(scenario_table.Name == scenario))
+        con.commit()
 
 
 cli.add_command(init_database)
