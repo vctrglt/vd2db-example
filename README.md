@@ -37,8 +37,6 @@ Here's a quick breakdown of the main commands and their purposes:
 
 - **`import`**: Import a specific scenario into the database.
 
-- **`update`**: Update an existing scenario in the database.
-
 - **`remove`**: Remove a specific scenario from the database.
 
 
