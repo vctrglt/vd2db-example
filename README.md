@@ -53,7 +53,7 @@ You can automate the process of feeding your SQLite database with `.vd` files us
    Before feeding data, initialize the database using:
 
 ```bash
-vd2db init databasename.db
+vd2db init test_database.db
 ```
 
 3. **Solve a Case in VEDA**:
@@ -61,7 +61,7 @@ In VEDA, solve a case that includes a regular scenario with the attribute `CmdF_
 
 ## Example
 
-There is an example of a modified model DemoS_012 called `DemoS_012_vd2db` that includes a regular scenario called `export_results.xlsx` that feeds a database.
+There is an example of a modified model DemoS_012 called `DemoS_012_vd2db` that includes a regular scenario called `import_vd2db.xlsx` that feeds a database.
 There is also two examples of graphs made with power query and python called `graph_elec.xlxs` and `graph_elec.py`. The files paths of the database and the process dictionnary `dict_vd2db.xlsx` has to be changed depending on your environment.
 
 
